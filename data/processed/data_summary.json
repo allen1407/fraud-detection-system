@@ -1,0 +1,31 @@
+{
+  "source_csv": "Banking_Transactions_USA_2023_2024.csv",
+  "rows": 5389,
+  "fraud_rows": 2657,
+  "fraud_rate": 0.493,
+  "date_min": "2023-01-21 08:42:42",
+  "date_max": "2025-01-20 12:21:18",
+  "missing_values": 0,
+  "column_roles": {
+    "Transaction_ID": "id",
+    "Account_Number": "id",
+    "Transaction_Date": "date",
+    "Transaction_Amount": "amount",
+    "Merchant_Name": "merchant",
+    "Transaction_Type": "type",
+    "Category": "merchant_category",
+    "City": "city",
+    "Country": "country",
+    "Payment_Method": "payment_method",
+    "Customer_Age": "age",
+    "Customer_Gender": "gender",
+    "Customer_Occupation": "occupation",
+    "Customer_Income": "income",
+    "Account_Balance": "balance",
+    "Transaction_Status": "status",
+    "Fraud_Flag": "label",
+    "Discount_Applied": "discount",
+    "Loyalty_Points_Earned": "loyalty_points",
+    "Transaction_Description": "free_text"
+  }
+}

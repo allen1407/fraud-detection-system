@@ -1,0 +1,110 @@
+{
+  "feature_list": [
+    "num__Transaction_Amount",
+    "num__Customer_Age",
+    "num__Customer_Income",
+    "num__Account_Balance",
+    "num__hour",
+    "num__day_of_week",
+    "num__month",
+    "num__is_weekend",
+    "num__Amount_to_Income",
+    "num__Amount_to_Balance",
+    "num__occupation_freq",
+    "num__merchant_freq",
+    "cat__Transaction_Type_Credit",
+    "cat__Transaction_Type_Debit",
+    "cat__Category_Clothing",
+    "cat__Category_Education",
+    "cat__Category_Electronics",
+    "cat__Category_Entertainment",
+    "cat__Category_Fitness",
+    "cat__Category_Food",
+    "cat__Category_Grocery",
+    "cat__Category_Healthcare",
+    "cat__Category_Housing",
+    "cat__Category_Savings",
+    "cat__Category_Shopping",
+    "cat__Category_Transport",
+    "cat__Category_Travel",
+    "cat__Category_Utilities",
+    "cat__Payment_Method_Cash",
+    "cat__Payment_Method_Credit Card",
+    "cat__Payment_Method_Debit Card",
+    "cat__Payment_Method_E-Wallet",
+    "cat__Payment_Method_Online Transfer",
+    "cat__Customer_Gender_Female",
+    "cat__Customer_Gender_Male",
+    "cat__Customer_Gender_Others"
+  ],
+  "input_columns": [
+    "Transaction_Date",
+    "Transaction_Amount",
+    "Customer_Age",
+    "Customer_Income",
+    "Account_Balance",
+    "Transaction_Type",
+    "Category",
+    "Payment_Method",
+    "Customer_Gender",
+    "Customer_Occupation",
+    "Merchant_Name"
+  ],
+  "threshold": 0.5,
+  "lr_threshold": 0.5,
+  "threshold_f1_unconstrained": 0.01,
+  "threshold_f1_guardrail": 0.5,
+  "max_val_fpr_guardrail": 0.3,
+  "threshold_cost_optimal": 0.01,
+  "cost_fn": 500.0,
+  "cost_fp": 15.0,
+  "trained_at": "2026-10-12T04:27:02+00:00",
+  "dataset_rows": 5389,
+  "split_sizes": {
+    "train": 3772,
+    "val": 808,
+    "test": 809
+  },
+  "epochs_run": 34,
+  "library_versions": {
+    "python": "3.11.15",
+    "numpy": "1.26.4",
+    "sklearn": "1.5.2",
+    "tensorflow": "2.16.2",
+    "pandas": "2.2.2"
+  },
+  "categories": {
+    "Transaction_Type": [
+      "Credit",
+      "Debit"
+    ],
+    "Category": [
+      "Clothing",
+      "Education",
+      "Electronics",
+      "Entertainment",
+      "Fitness",
+      "Food",
+      "Grocery",
+      "Healthcare",
+      "Housing",
+      "Savings",
+      "Shopping",
+      "Transport",
+      "Travel",
+      "Utilities"
+    ],
+    "Payment_Method": [
+      "Cash",
+      "Credit Card",
+      "Debit Card",
+      "E-Wallet",
+      "Online Transfer"
+    ],
+    "Customer_Gender": [
+      "Female",
+      "Male",
+      "Others"
+    ]
+  }
+}
