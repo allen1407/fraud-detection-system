@@ -58,7 +58,7 @@
   "threshold_cost_optimal": 0.01,
   "cost_fn": 500.0,
   "cost_fp": 15.0,
-  "trained_at": "2026-10-12T04:27:02+00:00",
+  "trained_at": "2026-10-12T04:42:36+00:00",
   "dataset_rows": 5389,
   "split_sizes": {
     "train": 3772,

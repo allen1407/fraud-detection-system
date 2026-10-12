@@ -109,10 +109,10 @@ def eval_cost(y, dp):
     approve_all, flag_all = y.sum() * C.COST_FN, (1 - y).sum() * C.COST_FP
     fig, ax = plt.subplots(figsize=(7, 4))
     ax.plot(df.threshold, df.cost, c=BLUE, label="Expected cost (DNN)")
-    ax.axhline(approve_all, c=GREY, ls="--", label=f"Approve everything (${approve_all:,.0f})")
-    ax.axhline(flag_all, c=ORANGE, ls="--", label=f"Flag everything (${flag_all:,.0f})")
+    ax.axhline(approve_all, c=GREY, ls="--", label=f"Approve everything (\\${approve_all:,.0f})")
+    ax.axhline(flag_all, c=ORANGE, ls="--", label=f"Flag everything (\\${flag_all:,.0f})")
     o = df.loc[df.cost.idxmin()]; ax.scatter([o.threshold], [o.cost], c=RED, zorder=5, label=f"Optimum t={o.threshold:.2f}")
-    ax.set_xlabel("Threshold"); ax.set_ylabel("Cost on test set (USD)"); ax.set_title(f"Cost vs threshold (FN=${C.COST_FN:.0f}, FP=${C.COST_FP:.0f})")
+    ax.set_xlabel("Threshold"); ax.set_ylabel("Cost on test set (USD)"); ax.set_title(f"Cost vs threshold (FN=\\${C.COST_FN:.0f}, FP=\\${C.COST_FP:.0f})")
     ax.legend(fontsize=8); save_fig("cost_threshold_analysis.png")
     return dict(approve_all_cost=float(approve_all), flag_all_cost=float(flag_all), optimum_threshold=float(o.threshold),
                 optimum_cost=float(o.cost))
