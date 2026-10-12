@@ -67,12 +67,11 @@ Operating threshold: 0.50, see the threshold note in `docs/SDD.md`. Readiness: 5
 
 ## Screenshots
 ![Home](docs/screenshots/01_home.png)
-![Score: auto-block](docs/screenshots/02_score_auto_block.png)
-![Score: manual review](docs/screenshots/03_score_manual_review.png)
-![Batch](docs/screenshots/06_batch.png)
-![Performance](docs/screenshots/07_performance.png)
-![Responsible AI](docs/screenshots/08_responsible_ai.png)
-![Monitoring](docs/screenshots/09_monitoring.png)
+![Score transaction](docs/screenshots/02_score_prediction.png)
+![Batch](docs/screenshots/04_batch.png)
+![Performance](docs/screenshots/05_performance.png)
+![Responsible AI](docs/screenshots/06_responsible_ai.png)
+![Monitoring](docs/screenshots/07_monitoring.png)
 
 ## Quick start
 ```bash

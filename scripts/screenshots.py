@@ -26,12 +26,12 @@ with sync_playwright() as p:
     page = b.new_page(viewport={"width": 1400, "height": 2400})
     page.goto(BASE); settle(page, 6000); shot(page, "01_home.png")
     page.goto(f"{BASE}/Score_Transaction"); settle(page, 8000)
-    for label, name in [("Clear Fraud", "02_score_auto_block.png"), ("Borderline", "03_score_manual_review.png"),
-                        ("Clear Legit", "04_score_auto_approve.png"), ("Invalid Input", "05_score_rejected.png")]:
-        page.get_by_role("button", name=label).click(); settle(page, 5000); shot(page, name)
+    page.get_by_role("button", name="Predict").click(); settle(page, 5000); shot(page, "02_score_prediction.png")
+    page.get_by_label("Amount ($)").fill("-250"); page.keyboard.press("Enter")
+    page.get_by_role("button", name="Predict").click(); settle(page, 4000); shot(page, "03_score_rejected.png")
     page.goto(f"{BASE}/Batch_Scoring"); settle(page, 6000)
-    page.set_input_files("input[type=file]", str(SAMPLE)); settle(page, 8000); shot(page, "06_batch.png")
-    for path, name in [("Model_Performance", "07_performance.png"), ("Responsible_AI", "08_responsible_ai.png"),
-                       ("Monitoring_Readiness", "09_monitoring.png"), ("Documentation", "10_documentation.png")]:
+    page.set_input_files("input[type=file]", str(SAMPLE)); settle(page, 8000); shot(page, "04_batch.png")
+    for path, name in [("Model_Performance", "05_performance.png"), ("Responsible_AI", "06_responsible_ai.png"),
+                       ("Monitoring_Readiness", "07_monitoring.png"), ("Documentation", "08_documentation.png")]:
         page.goto(f"{BASE}/{path}"); settle(page, 7000); shot(page, name)
     b.close()
