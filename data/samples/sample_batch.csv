@@ -1,0 +1,21 @@
+Transaction_Date,Transaction_Amount,Merchant_Name,Transaction_Type,Category,Payment_Method,Customer_Age,Customer_Gender,Customer_Occupation,Customer_Income,Account_Balance
+2023-12-20 05:13:33,3822.4,"Alvarez, Johnson and Thompson",Debit,Clothing,Debit Card,33,Male,Aeronautical engineer,111631.26,9595.28
+2023-07-07 16:24:17,113.4,Walker-Mendoza,Credit,Food,E-Wallet,68,Female,Homeopath,114321.06,7241.24
+2024-01-15 19:48:06,4112.59,"Rodriguez, Berry and Matthews",Debit,Housing,Cash,27,Male,Fine artist,81148.25,12992.85
+2024-05-20 04:40:14,565.6,Maxwell-Mckenzie,Credit,Electronics,Credit Card,40,Female,Mining engineer,37781.13,9950.65
+2023-09-20 22:08:58,-120.0,"Morris, Knight and Chandler",Debit,Grocery,Cash,30,Male,"Radiographer, therapeutic",145530.33,2034.55
+2023-06-06 14:16:25,439.94,Reed-Mckenzie,Debit,Utilities,Debit Card,58,Male,Forensic psychologist,120547.34,15805.35
+2023-05-14 17:09:30,4015.07,"Bradford, Morgan and Frazier",Credit,Education,E-Wallet,35,Others,Midwife,25106.08,8498.83
+2024-02-27 01:26:36,529.05,"Mathis, Morgan and Fox",Debit,Healthcare,Online Transfer,34,Others,Dentist,22690.7,6379.41
+2024-02-22 04:19:39,665.21,"Valdez, Smith and Williams",Credit,Savings,Debit Card,34,Female,Technical sales engineer,142304.97,8198.73
+2025-01-04 10:31:03,1897.66,Harrington Ltd,Debit,Shopping,Debit Card,57,Female,Sports coach,48927.36,10317.14
+2024-05-17 21:03:45,2355.58,"Wood, James and Crawford",Credit,Entertainment,Cash,36,Others,Environmental education officer,104047.77,8467.85
+2024-02-18 08:40:17,574.56,English LLC,Credit,Utilities,Credit Card,66,Male,Surgeon,90774.61,13268.29
+2023-07-30 19:15:34,4940.66,Reid and Sons,Credit,Utilities,Credit Card,46,Male,Office manager,55512.77,4126.91
+2025-01-09 01:09:05,2292.92,Ferrell and Sons,Credit,Healthcare,Debit Card,250,Others,Waste management officer,141236.89,7222.13
+2024-01-14 21:26:36,2744.04,"Wilkerson, Webb and Smith",Credit,Travel,Online Transfer,24,Female,"Engineer, technical sales",83835.75,700.88
+2024-11-13 01:02:57,257.35,Knox and Sons,Credit,Utilities,E-Wallet,25,Female,"Buyer, retail",73671.86,4514.38
+2023-05-09 10:14:37,3432.06,Thomas and Sons,Debit,Grocery,Online Transfer,45,Male,Set designer,134744.59,931.16
+2023-11-03 22:03:02,3388.35,"Lee, Tran and Norman",Credit,Shopping,Cash,23,Others,Animator,96362.71,15216.49
+2023-10-16 06:47:28,2464.24,"Moran, Cook and Mcbride",Credit,Transport,Cash,45,Female,Forensic scientist,132391.51,13891.79
+2023-02-10 11:34:10,3495.28,"Rodriguez, Cole and Gibbs",Credit,Clothing,Cash,54,Female,Hotel manager,122105.68,8589.75

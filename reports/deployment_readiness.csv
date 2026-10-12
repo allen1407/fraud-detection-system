@@ -1,0 +1,16 @@
+check,criterion,measured,status
+DNN predictive power,test ROC-AUC >= 0.70,0.524,FAIL
+LR predictive power,test ROC-AUC >= 0.70,0.510,FAIL
+Flag rate sanity,DNN flag rate <= 50%,28.2%,PASS
+False-positive rate,DNN FPR <= 30%,26.8%,PASS
+Expected cost vs flag-all baseline,DNN cost < flag-everything cost,"$142,150 vs $6,150",FAIL
+Single-row latency (no SHAP),p95 <= 100 ms,5.8 ms,PASS
+Single-row latency (with SHAP),p95 <= 2000 ms,126 ms,PASS
+Batch throughput,>= 100 rows/s,13667 rows/s,PASS
+Explanation stability,mean Spearman >= 0.80,0.997 +/- 0.005,PASS
+Fairness (gender),flag-rate gap <= 0.10,0.123,FAIL
+Fairness (age band),flag-rate gap <= 0.10,0.187,FAIL
+Robustness,median flip distance >= 0.5 std,1.124 std,PASS
+Data drift (train vs test),max PSI <= 0.25,0.161,PASS
+Automated tests,all pass,13/13 passed,PASS
+Model artifacts & metadata,"all files present, metadata complete",complete,PASS
