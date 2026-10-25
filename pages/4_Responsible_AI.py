@@ -9,20 +9,24 @@ st.set_page_config(page_title="Responsible AI", page_icon="⚖️", layout="wide
 st.title("⚖️ Responsible AI")
 try:
     require_artifacts()
-    st.subheader("Fairness (DNN at the operating threshold, test set)")
-    for f, title, fig in [("fairness_gender.csv", "By gender", "fairness_gender.png"), ("fairness_age.csv", "By age band", "fairness_age.png")]:
-        df = read_csv(f); st.markdown(f"**{title}**")
-        a, b = st.columns([3, 2]); a.image(str(C.FIGURES_DIR / fig)); b.dataframe(df.round(3), hide_index=True)
-    st.caption("Group sizes are small (≈110–300 per group), and the model is near chance, so these gaps are mostly sampling noise. "
-               "They still exceed the 0.10 audit criterion and would need investigation on real data.")
+    st.subheader("Fairness & subgroup performance (DNN at the operating threshold, test set)")
+    st.info("The dataset contains no customer attributes (no gender, age or location), so fairness across protected groups "
+            "cannot be audited. As a proxy, performance is compared across transaction segments.")
+    n_fraud = []
+    for f, title in [("fairness_amount", "By amount band"), ("fairness_time", "By time of day")]:
+        df = read_csv(f"{f}.csv"); st.markdown(f"**{title}**"); n_fraud += df.n_fraud.iloc[:-1].tolist()
+        a, b = st.columns([3, 2]); a.image(str(C.FIGURES_DIR / f"{f}.png")); b.dataframe(df.round(4), hide_index=True)
+    st.caption(f"Each segment contains only {min(n_fraud)}–{max(n_fraud)} frauds, so a recall gap mostly reflects a handful of "
+               "transactions. Gaps above the 0.20 audit criterion should be re-checked on more data before deployment.")
 
-    st.subheader("Robustness (counterfactual search, 15 cases)")
-    rb = read_csv("robustness.csv"); st.dataframe(rb.round(3), hide_index=True)
-    st.write(f"DNN class flipped in **{rb.dnn_class_flipped.mean():.0%}** of cases, verdict flipped in **{rb.verdict_flipped.mean():.0%}**; "
-             f"median distance to flip **{rb.distance_std.median():.2f}** training standard deviations (numeric inputs).")
+    st.subheader("Robustness (counterfactual search, 15 cases: 5 fraud, 10 legitimate)")
+    rb, rs = read_csv("robustness.csv"), read_json("robustness_summary.json"); st.dataframe(rb.round(4), hide_index=True)
+    st.write(f"DNN class flipped in **{rs['dnn_flip_rate']:.0%}** of cases, verdict flipped in **{rs['verdict_flip_rate']:.0%}**; "
+             f"{rs['no_flip_cases']} of {rs['n_cases']} cases never flipped within **{rs['search_max_std']:.1f}** training standard "
+             "deviations of random perturbation (V1-V28 and Amount).")
 
     st.subheader("Explainability")
-    st.write("**SHAP stability** (1% noise on numeric inputs, 30 samples)")
+    st.write("**SHAP stability** (1% noise on V1-V28 and Amount, 30 samples)")
     s = read_json("shap_stability.json")
     st.metric("Mean Spearman rank correlation", f"{s['mean_spearman']:.3f} ± {s['std_spearman']:.3f}")
     imp = read_csv("shap_global.csv").head(12).iloc[::-1]

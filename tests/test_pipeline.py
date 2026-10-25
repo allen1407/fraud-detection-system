@@ -13,19 +13,20 @@ def test_valid_transaction_scores(pipe, valid_record):
 
 
 def test_negative_amount_rejected(pipe, valid_record):
-    errs = pipe.validate(dict(valid_record, Transaction_Amount=-10))
-    assert any("Transaction_Amount" in e for e in errs)
-    assert pipe.assess(dict(valid_record, Transaction_Amount=-10))["verdict"] == "TRANSACTION REJECTED"
+    errs = pipe.validate(dict(valid_record, Amount=-10))
+    assert any("Amount" in e for e in errs)
+    assert pipe.assess(dict(valid_record, Amount=-10))["verdict"] == "TRANSACTION REJECTED"
 
 
 def test_missing_field_rejected(pipe, valid_record):
-    rec = dict(valid_record); rec.pop("Customer_Age")
-    assert any("Customer_Age" in e for e in pipe.validate(rec))
+    rec = dict(valid_record); rec.pop("V14")
+    assert any("V14" in e for e in pipe.validate(rec))
 
 
-def test_out_of_range_and_unknown_category_rejected(pipe, valid_record):
-    assert pipe.validate(dict(valid_record, Customer_Age=500))
-    assert pipe.validate(dict(valid_record, Category="NotACategory"))
+def test_out_of_range_and_non_numeric_rejected(pipe, valid_record):
+    assert pipe.validate(dict(valid_record, V1=500.0))
+    assert pipe.validate(dict(valid_record, Time=-5))
+    assert pipe.validate(dict(valid_record, V3="abc"))
 
 
 def test_probabilities_in_unit_interval(pipe, valid_record):
@@ -39,7 +40,7 @@ def test_recommendation_in_allowed_set(pipe, valid_record):
 
 def test_report_nonempty_for_valid_and_invalid(pipe, valid_record):
     assert len(pipe.generate_report(pipe.assess(valid_record))) > 100
-    rep = pipe.generate_report(pipe.assess(dict(valid_record, Transaction_Amount=-1)))
+    rep = pipe.generate_report(pipe.assess(dict(valid_record, Amount=-1)))
     assert "TRANSACTION REJECTED" in rep
 
 
@@ -57,8 +58,8 @@ def test_routing_rules(pipe):
 
 def test_batch_of_20_runs_with_invalid_rows(pipe, test_df):
     b = test_df.head(20)[C.INPUT_COLUMNS].copy()
-    b.loc[2, "Transaction_Amount"] = -1
-    b.loc[7, "Customer_Gender"] = None
+    b.loc[2, "Amount"] = -1
+    b.loc[7, "V14"] = None
     out = pipe.score_batch(b)
     assert len(out) == 20 and (out.verdict == "TRANSACTION REJECTED").sum() == 2
     assert out.loc[2, "errors"] != ""

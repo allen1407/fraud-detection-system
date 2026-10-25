@@ -9,16 +9,12 @@ import pandas as pd
 from sklearn.neighbors import NearestNeighbors
 
 from . import config as C
-from .features import CATEGORICAL_FEATURES, NUMERIC_FEATURES
+from .features import NUMERIC_FEATURES
 
 FACTOR_LABELS = {
-    "Transaction_Amount": "Transaction amount", "Customer_Age": "Customer age",
-    "Customer_Income": "Customer income", "Account_Balance": "Account balance",
-    "hour": "Hour of day", "day_of_week": "Day of week", "month": "Month", "is_weekend": "Weekend flag",
-    "Amount_to_Income": "Amount / income", "Amount_to_Balance": "Amount / balance",
-    "occupation_freq": "Occupation frequency", "merchant_freq": "Merchant frequency",
-    "Transaction_Type": "Transaction type", "Category": "Merchant category",
-    "Payment_Method": "Payment method", "Customer_Gender": "Gender",
+    **{v: f"{v} (PCA component)" for v in C.PCA_INPUTS},
+    "Amount": "Transaction amount", "hour": "Hour of day", "is_night": "Night-time flag (00-06 h)",
+    "log_amount": "log(1 + amount)",
 }
 
 
@@ -31,13 +27,16 @@ class FraudPipeline:
         self.dnn = tf.keras.models.load_model(models_dir / "fraud_dnn_model.keras")
         self.threshold = float(self.meta["threshold"])
         self.lr_threshold = float(self.meta["lr_threshold"])
-        self.categories = self.meta["categories"]
         self.fe, self.ct = self.pre.named_steps["fe"], self.pre.named_steps["ct"]
 
-        self.train = pd.read_csv(C.TRAIN_CSV, parse_dates=[C.DATE_COL])
-        Xtr = self.pre.transform(self.train[C.INPUT_COLUMNS])
-        self.nn = NearestNeighbors(n_neighbors=C.KNN_K + 1).fit(Xtr)
-        loo = self.nn.kneighbors(Xtr)[0][:, 1:].mean(axis=1)           # leave-one-out kNN distance
+        self.train = pd.read_csv(C.TRAIN_CSV)
+        # reference set: every training fraud + a fixed sample of legitimate rows (keeps the kNN index small)
+        legit = self.train[self.train[C.TARGET] == 0]
+        self.reference = pd.concat([self.train[self.train[C.TARGET] == 1],
+                                    legit.sample(min(C.TRUST_REF_LEGIT, len(legit)), random_state=C.SEED)])
+        Xref = self.pre.transform(self.reference[C.INPUT_COLUMNS])
+        self.nn = NearestNeighbors(n_neighbors=C.KNN_K + 1).fit(Xref)
+        loo = self.nn.kneighbors(Xref)[0][:, 1:].mean(axis=1)          # leave-one-out kNN distance
         self.ref_distance = float(np.percentile(loo, 95))
         self._explainer = None
         self._bg = None
@@ -53,10 +52,6 @@ class FraudPipeline:
                 errors.append(f"Missing required field: {f}")
         if errors:
             return errors
-        try:
-            pd.to_datetime(record[C.DATE_COL])
-        except Exception:
-            errors.append(f"{C.DATE_COL} is not a valid date/time")
         for f in C.NUMERIC_INPUTS:
             try:
                 v = float(record[f])
@@ -65,26 +60,18 @@ class FraudPipeline:
                 continue
             if not np.isfinite(v):
                 errors.append(f"{f} must be a finite number")
-            elif f == "Transaction_Amount" and v <= 0:
-                errors.append("Transaction_Amount must be positive (negative or zero amounts are not allowed)")
-            elif v < 0:
+            elif f in ("Amount", C.TIME_COL) and v < 0:
                 errors.append(f"{f} must not be negative")
             else:
                 lo, hi = C.RANGES[f]
                 if not lo <= v <= hi:
                     errors.append(f"{f}={v:g} is outside the valid range [{lo:g}, {hi:g}]")
-        for f in C.CATEGORICAL_INPUTS:
-            if str(record[f]) not in self.categories[f]:
-                errors.append(f"Unknown {f}: '{record[f]}' (allowed: {', '.join(self.categories[f])})")
         return errors
 
     # ------------------------------------------------------------------ scoring
     def _frame(self, records) -> pd.DataFrame:
         df = pd.DataFrame(records)[C.INPUT_COLUMNS].copy()
-        for f in C.NUMERIC_INPUTS:
-            df[f] = df[f].astype(float)
-        df[C.DATE_COL] = pd.to_datetime(df[C.DATE_COL])
-        return df
+        return df.astype(float)
 
     def score(self, records) -> pd.DataFrame:
         """records: dict, list of dicts or DataFrame of VALID rows -> DNN and LR probabilities."""
@@ -113,29 +100,14 @@ class FraudPipeline:
         return "MANUAL REVIEW"
 
     # ------------------------------------------------------------------ explainability
-    def _decode(self, M):
-        M = np.atleast_2d(M)
-        n_num = len(NUMERIC_FEATURES)
-        df = pd.DataFrame(M[:, :n_num].astype(float), columns=NUMERIC_FEATURES)
-        for j, c in enumerate(CATEGORICAL_FEATURES):
-            cats = np.array(self.categories[c])
-            idx = np.clip(np.rint(M[:, n_num + j]).astype(int), 0, len(cats) - 1)
-            df[c] = cats[idx]
-        return df
-
-    def _encode(self, fe_df: pd.DataFrame) -> np.ndarray:
-        M = fe_df[NUMERIC_FEATURES].to_numpy(float)
-        codes = np.column_stack([[self.categories[c].index(v) for v in fe_df[c]] for c in CATEGORICAL_FEATURES])
-        return np.hstack([M, codes])
-
     def _model_fn(self, M):
-        X = self.ct.transform(self._decode(M)).astype("float32")
+        X = self.ct.transform(pd.DataFrame(np.atleast_2d(M), columns=NUMERIC_FEATURES)).astype("float32")
         return self.dnn(X, training=False).numpy().ravel()
 
     def _build_explainer(self):
         import shap
         bg = self.train.sample(100, random_state=C.SEED)
-        self._bg = self._encode(self.fe.transform(bg[C.INPUT_COLUMNS]))
+        self._bg = self.fe.transform(bg[C.INPUT_COLUMNS]).to_numpy(float)
         self._explainer = shap.KernelExplainer(self._model_fn, self._bg)
 
     def shap_values(self, fe_matrix, nsamples=200):
@@ -143,13 +115,12 @@ class FraudPipeline:
 
     def explain(self, record: dict, top_k=5) -> list:
         fe_df = self.fe.transform(self._frame([record]))
-        sv = self.shap_values(self._encode(fe_df))[0]
-        cols = NUMERIC_FEATURES + CATEGORICAL_FEATURES
+        sv = self.shap_values(fe_df.to_numpy(float))[0]
+        cols = NUMERIC_FEATURES
         out = []
         for i in np.argsort(-np.abs(sv))[:top_k]:
-            v = fe_df.iloc[0][cols[i]]
             out.append(dict(feature=cols[i], label=FACTOR_LABELS[cols[i]],
-                            value=v if isinstance(v, str) else float(v), shap=float(sv[i]),
+                            value=float(fe_df.iloc[0][cols[i]]), shap=float(sv[i]),
                             direction="increases fraud risk" if sv[i] > 0 else "decreases fraud risk"))
         return out
 
@@ -184,8 +155,7 @@ class FraudPipeline:
               f"Trust score           : {result['trust']:.2f} (>= {C.TRUST_MIN:.1f} required for automatic action)",
               "", f"Recommendation: {result['recommendation']}", "", "Top factors (SHAP, DNN):"]
         for i, f in enumerate(result["factors"], 1):
-            val = f["value"] if isinstance(f["value"], str) else f"{f['value']:.4g}"
-            L.append(f"  {i}. {f['label']} = {val}: {f['direction']} ({f['shap']:+.4f})")
+            L.append(f"  {i}. {f['label']} = {f['value']:.4g}: {f['direction']} ({f['shap']:+.4f})")
         L += ["", "Note: decision support only; final decisions on MANUAL REVIEW cases rest with a human analyst."]
         return "\n".join(L)
 
@@ -213,7 +183,7 @@ class FraudPipeline:
                 dflag, lflag = s.dnn_prob[k] >= self.threshold, s.lr_prob[k] >= self.lr_threshold
                 factors = ""
                 if explain:
-                    factors = "; ".join(f"{f['label']} ({f['shap']:+.3f})" for f in self.explain(records[i]))
+                    factors = "; ".join(f"{f['label']} ({f['shap']:+.3g})" for f in self.explain(records[i]))
                 out.iloc[i] = [v, float(s.dnn_prob[k]), float(s.lr_prob[k]), bool(dflag == lflag),
                                float(trust[k]), C.RECOMMENDATIONS[v], "", factors]
         return pd.concat([df.reset_index(drop=True), out.reset_index(drop=True)], axis=1)

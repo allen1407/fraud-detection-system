@@ -1,5 +1,8 @@
 {
-  "median_distance": 1.1243076734030917,
-  "dnn_flip_rate": 1.0,
-  "verdict_flip_rate": 0.6666666666666666
+  "median_distance": 3.0,
+  "search_max_std": 3.0,
+  "no_flip_cases": 15,
+  "n_cases": 15,
+  "dnn_flip_rate": 0.0,
+  "verdict_flip_rate": 0.0
 }

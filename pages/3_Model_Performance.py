@@ -13,7 +13,8 @@ st.title("📈 Model Performance")
 try:
     require_artifacts()
     m, pred, lat = read_json("metrics.json"), read_csv("test_predictions.csv"), read_json("latency.json")
-    st.caption(f"Held-out test set: {m['n_test']} transactions, {m['test_fraud_rate']:.1%} fraud.")
+    st.caption(f"Held-out test set: {m['n_test']:,} transactions, {m['test_fraud_rate']:.2%} fraud "
+               f"({m['dnn']['confusion_matrix']['fn'] + m['dnn']['confusion_matrix']['tp']} frauds). Accuracy is uninformative at this prevalence.")
     if m["dnn"]["roc_auc"] < 0.6:
         st.warning("ROC-AUC near 0.5 means the models perform at chance level on this dataset.")
     cols = st.columns(6)
@@ -47,12 +48,13 @@ try:
     fig.update_layout(height=320, coloraxis_showscale=False); c1.plotly_chart(fig, use_container_width=True)
     k = c2.columns(4)
     k[0].metric("Precision", f"{tp / max(tp + fp, 1):.3f}"); k[1].metric("Recall", f"{tp / max(tp + fn, 1):.3f}")
-    k[2].metric("Flag rate", f"{flag.mean():.1%}"); k[3].metric("Expected cost", f"${cost:,.0f}")
+    k[2].metric("Flag rate", f"{flag.mean():.2%}"); k[3].metric("Expected cost", f"${cost:,.0f}")
     c2.caption(f"Cost = {fn} missed frauds × \\${C.COST_FN:.0f} + {fp} false alarms × \\${C.COST_FP:.0f}. "
                f"Operating threshold {m['thresholds']['dnn_operating']:.2f}; unconstrained F1-optimal "
                f"{m['thresholds']['dnn_f1_unconstrained']:.2f}; cost-optimal {m['thresholds']['dnn_cost_optimal']:.2f}.")
     if t <= 0.05:
-        c2.warning("At very low thresholds the model flags nearly everything. This is cheapest under the cost model only because the model has no real signal.")
+        c2.info("Low thresholds catch more fraud at the price of more false alarms; with a $500 miss vs $15 false alarm, "
+                "the cost-optimal threshold sits well below the F1-optimal one.")
     st.image(str(C.FIGURES_DIR / "cost_threshold_analysis.png"))
 
     st.subheader("Latency")

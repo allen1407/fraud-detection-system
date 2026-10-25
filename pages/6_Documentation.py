@@ -17,10 +17,11 @@ try:
         with tabs[-1]:
             st.markdown("""
 ### Limitations
-- **No predictive signal:** on this dataset both models score ROC-AUC ≈ 0.5 (chance). Reported metrics are real, but the models cannot detect fraud.
-- **Unrealistic prevalence:** ~49% fraud is far above real banking traffic; thresholds and the cost trade-off need recalibration before any real use.
-- **Likely synthetic data:** unique account numbers and generated text suggest simulated data; findings may not transfer.
-- **Small groups:** fairness estimates rest on 110–300 rows per group.
+- **Few positive examples:** only 473 frauds in total (71 in the test set), so recall, precision and subgroup estimates have wide confidence intervals.
+- **Anonymised features:** V1–V28 are PCA components; SHAP factors cannot be translated into business reasons for a customer or analyst.
+- **Old, short time window:** two days of European card traffic from September 2013; patterns will have drifted since.
+- **No customer attributes:** fairness across protected groups cannot be audited; only transaction segments are compared.
+- **Random split:** train and test come from the same two days, so the drift baseline and metrics are optimistic about future performance.
 - **Decision support only:** the system recommends; humans own MANUAL REVIEW decisions.
 - **SHAP is approximate** (KernelExplainer on 100 background rows) and explains the DNN only.""")
 except Exception:

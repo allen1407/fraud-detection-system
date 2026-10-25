@@ -13,7 +13,7 @@ from sklearn.metrics import (accuracy_score, average_precision_score, confusion_
                              precision_recall_curve, precision_score, recall_score, roc_auc_score, roc_curve)
 
 from . import config as C
-from .features import CATEGORICAL_FEATURES, NUMERIC_FEATURES
+from .features import NUMERIC_FEATURES
 from .pipeline import FraudPipeline
 
 R, F = C.REPORTS_DIR, C.FIGURES_DIR
@@ -81,7 +81,7 @@ def eval_metrics(pipe, test):
     plt.figure(figsize=(5, 4.5))
     for name, p, c in [("DNN", dp, BLUE), ("LR", lp, ORANGE)]:
         pr, rc, _ = precision_recall_curve(y, p); plt.plot(rc, pr, c=c, label=f"{name} (AP={average_precision_score(y, p):.3f})")
-    plt.axhline(y.mean(), ls="--", c=GREY, label=f"Base rate {y.mean():.2f}"); plt.xlabel("Recall"); plt.ylabel("Precision")
+    plt.axhline(y.mean(), ls="--", c=GREY, label=f"Base rate {y.mean():.4f}"); plt.xlabel("Recall"); plt.ylabel("Precision")
     plt.title("Precision-recall curve (test set)"); plt.legend(); save_fig("pr_curve.png")
 
     fig, axs = plt.subplots(1, 2, figsize=(9, 4))
@@ -112,7 +112,8 @@ def eval_cost(y, dp):
     ax.axhline(approve_all, c=GREY, ls="--", label=f"Approve everything (\\${approve_all:,.0f})")
     ax.axhline(flag_all, c=ORANGE, ls="--", label=f"Flag everything (\\${flag_all:,.0f})")
     o = df.loc[df.cost.idxmin()]; ax.scatter([o.threshold], [o.cost], c=RED, zorder=5, label=f"Optimum t={o.threshold:.2f}")
-    ax.set_xlabel("Threshold"); ax.set_ylabel("Cost on test set (USD)"); ax.set_title(f"Cost vs threshold (FN=\\${C.COST_FN:.0f}, FP=\\${C.COST_FP:.0f})")
+    ax.set_yscale("log")                                     # flag-everything dwarfs the other costs at 0.17% prevalence
+    ax.set_xlabel("Threshold"); ax.set_ylabel("Cost on test set (USD, log scale)"); ax.set_title(f"Cost vs threshold (FN=\\${C.COST_FN:.0f}, FP=\\${C.COST_FP:.0f})")
     ax.legend(fontsize=8); save_fig("cost_threshold_analysis.png")
     return dict(approve_all_cost=float(approve_all), flag_all_cost=float(flag_all), optimum_threshold=float(o.threshold),
                 optimum_cost=float(o.cost))
@@ -127,8 +128,9 @@ def eval_latency(pipe, test):
         for r in recs[:100]:
             t = time.perf_counter(); pipe.assess(r, explain=expl); ts.append((time.perf_counter() - t) * 1000)
         res[key] = dict(mean=float(np.mean(ts)), p50=float(np.percentile(ts, 50)), p95=float(np.percentile(ts, 95)), n=len(ts))
-    t = time.perf_counter(); pipe.score_batch(test[C.INPUT_COLUMNS]); dt = time.perf_counter() - t
-    res["batch"] = dict(rows=int(len(test)), seconds=float(dt), rows_per_second=float(len(test) / dt))
+    batch = test[C.INPUT_COLUMNS].head(5000)                 # same cap as the app's batch page
+    t = time.perf_counter(); pipe.score_batch(batch); dt = time.perf_counter() - t
+    res["batch"] = dict(rows=int(len(batch)), seconds=float(dt), rows_per_second=float(len(batch) / dt))
     (R / "latency.json").write_text(json.dumps(res, indent=2))
     return res
 
@@ -136,99 +138,112 @@ def eval_latency(pipe, test):
 def eval_shap(pipe, test, X_unused=None):
     rng = np.random.default_rng(C.SEED)
     sub = test.sample(150, random_state=C.SEED)
-    fe = pipe.fe.transform(sub[C.INPUT_COLUMNS]); M = pipe._encode(fe)
+    M = pipe.fe.transform(sub[C.INPUT_COLUMNS]).to_numpy(float)
     np.random.seed(C.SEED); sv = pipe.shap_values(M)
-    cols = NUMERIC_FEATURES + CATEGORICAL_FEATURES
+    cols = NUMERIC_FEATURES
     imp = pd.DataFrame(dict(feature=cols, mean_abs_shap=np.abs(sv).mean(0))).sort_values("mean_abs_shap", ascending=False)
     imp.to_csv(R / "shap_global.csv", index=False)
     import shap
     shap.summary_plot(sv, pd.DataFrame(M, columns=cols), show=False, plot_size=(8, 6))
-    plt.title("SHAP summary (DNN, 150 test rows; categoricals shown as codes)"); save_fig("shap_summary.png")
+    plt.title("SHAP summary (DNN, 150 test rows)"); save_fig("shap_summary.png")
 
-    # stability: 1% multiplicative Gaussian noise on numeric inputs, 30 samples
+    # stability: 1% multiplicative Gaussian noise on V1-V28 and Amount, 30 samples
     stab = []
     for _, row in test.sample(30, random_state=1).iterrows():
         r = row[C.INPUT_COLUMNS].to_dict()
         noisy = dict(r)
-        for f in C.NUMERIC_INPUTS:
+        for f in C.PERTURB_INPUTS:
             noisy[f] = float(r[f]) * (1 + 0.01 * rng.standard_normal())
         out = []
         for rec in (r, noisy):
-            Mi = pipe._encode(pipe.fe.transform(pipe._frame([rec])))
+            Mi = pipe.fe.transform(pipe._frame([rec])).to_numpy(float)
             np.random.seed(C.SEED); out.append(pipe.shap_values(Mi)[0])
         stab.append(spearmanr(out[0], out[1])[0])
-    res = dict(n_samples=30, noise="1% multiplicative Gaussian on numeric inputs", mean_spearman=float(np.mean(stab)),
+    res = dict(n_samples=30, noise="1% multiplicative Gaussian on V1-V28 and Amount", mean_spearman=float(np.mean(stab)),
                std_spearman=float(np.std(stab)), min_spearman=float(np.min(stab)))
     (R / "shap_stability.json").write_text(json.dumps(res, indent=2))
     return res
 
 
+SUBGROUPS = [  # (column, file stem, title); the dataset has no customer attributes, so audit transaction segments
+    ("amount_band", "fairness_amount", "amount band"),
+    ("time_of_day", "fairness_time", "time of day"),
+]
+
+
 def eval_fairness(test, y, dp, thr):
     df = test.copy(); df["pred"] = (dp >= thr).astype(int); df["y"] = y
-    df["age_band"] = pd.cut(df.Customer_Age, [-1, 25, 40, 60, 200], labels=["<=25", "26-40", "41-60", "60+"])
+    df["amount_band"] = pd.cut(df.Amount, [-1, 10, 100, 500, np.inf], labels=["<=$10", "$10-100", "$100-500", ">$500"])
+    hour = (df[C.TIME_COL] // 3600) % 24
+    df["time_of_day"] = pd.cut(hour, [-1, 5, 17, 23], labels=["Night 00-06", "Day 06-18", "Evening 18-24"])
     out = {}
-    for col, fname in [("Customer_Gender", "fairness_gender.csv"), ("age_band", "fairness_age.csv")]:
+    for col, stem, title in SUBGROUPS:
         rows = []
         for g, d in df.groupby(col, observed=True):
             tp = ((d.pred == 1) & (d.y == 1)).sum(); fp = ((d.pred == 1) & (d.y == 0)).sum()
-            rows.append(dict(group=g, n=len(d), flag_rate=d.pred.mean(), tpr=tp / max((d.y == 1).sum(), 1),
-                             fpr=fp / max((d.y == 0).sum(), 1), precision=tp / max(d.pred.sum(), 1)))
+            rows.append(dict(group=g, n=len(d), n_fraud=int(d.y.sum()), flag_rate=d.pred.mean(),
+                             tpr=tp / max((d.y == 1).sum(), 1), fpr=fp / max((d.y == 0).sum(), 1),
+                             precision=tp / max(d.pred.sum(), 1)))
         t = pd.DataFrame(rows)
         gaps = {c: t[c].max() - t[c].min() for c in ["flag_rate", "tpr", "fpr", "precision"]}
-        gap_row = dict(group="MAX GAP", n=int(t.n.sum()), **gaps)
-        pd.concat([t, pd.DataFrame([gap_row])]).to_csv(R / fname, index=False)
+        gap_row = dict(group="MAX GAP", n=int(t.n.sum()), n_fraud=int(t.n_fraud.sum()), **gaps)
+        pd.concat([t, pd.DataFrame([gap_row])]).to_csv(R / f"{stem}.csv", index=False)
         out[col] = gaps
         fig, ax = plt.subplots(figsize=(7, 3.8)); w = 0.2; x = np.arange(len(t))
         for i, (m, c) in enumerate([("flag_rate", GREY), ("tpr", BLUE), ("fpr", ORANGE), ("precision", "#16a34a")]):
             ax.bar(x + i * w - 1.5 * w, t[m], w, label=m.upper().replace("_", " "), color=c)
-        ax.set_xticks(x, [f"{g}\n(n={n})" for g, n in zip(t.group, t.n)]); ax.set_ylim(0, 1); ax.legend(ncol=4, fontsize=8)
-        ax.set_title(f"Fairness by {'gender' if col == 'Customer_Gender' else 'age band'} (DNN, test set)")
-        save_fig("fairness_gender.png" if col == "Customer_Gender" else "fairness_age.png")
+        ax.set_xticks(x, [f"{g}\n(n={n}, fraud={k})" for g, n, k in zip(t.group, t.n, t.n_fraud)]); ax.set_ylim(0, 1)
+        ax.legend(ncol=4, fontsize=8); ax.set_title(f"Subgroup performance by {title} (DNN, test set)")
+        save_fig(f"{stem}.png")
     return out
 
 
-def eval_robustness(pipe, test, n_cases=15, n_dirs=400):
+def eval_robustness(pipe, test, n_cases=15, n_dirs=400, max_mag=3.0):
     rng = np.random.default_rng(C.SEED)
-    scale = pipe.train[C.NUMERIC_INPUTS].std().values
+    P = C.PERTURB_INPUTS
+    scale = pipe.train[P].std().values
+    n_fraud = min(5, int(test[C.TARGET].sum()))
+    cases = pd.concat([test[test[C.TARGET] == 1].sample(n_fraud, random_state=C.SEED),
+                       test[test[C.TARGET] == 0].sample(n_cases - n_fraud, random_state=C.SEED)])
     rows = []
-    for _, row in test.sample(n_cases, random_state=C.SEED).iterrows():
+    for _, row in cases.iterrows():
         r = row[C.INPUT_COLUMNS].to_dict()
         base = pipe.assess(r, explain=False)
         base_flag = base["dnn_prob"] >= pipe.threshold
-        x0 = np.array([float(r[f]) for f in C.NUMERIC_INPUTS])
+        x0 = np.array([float(r[f]) for f in P])
         best = None
-        mags = np.linspace(0.02, 3.0, 40)
+        mags = np.linspace(0.02, max_mag, 40)
         dirs = rng.standard_normal((n_dirs, len(x0))); dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
         for mag in mags:                                       # smallest magnitude first
             cands = []
             for d in dirs:
                 x = x0 + mag * d * scale
-                for k, f in enumerate(C.NUMERIC_INPUTS):
-                    lo, hi = C.RANGES[f]; x[k] = np.clip(x[k], max(lo, 1.0 if f == "Transaction_Amount" else lo), hi)
-                x[1] = np.round(x[1])
-                cands.append(dict(r, **{f: float(v) for f, v in zip(C.NUMERIC_INPUTS, x)}))
+                for k, f in enumerate(P):
+                    x[k] = np.clip(x[k], *C.RANGES[f])
+                cands.append(dict(r, **{f: float(v) for f, v in zip(P, x)}))
             sc = pipe.score(cands)
             flips = np.where((sc.dnn_prob.to_numpy() >= pipe.threshold) != base_flag)[0]
             if len(flips):
                 i = flips[0]; cf = cands[i]
-                dist = float(np.linalg.norm((np.array([cf[f] for f in C.NUMERIC_INPUTS]) - x0) / scale))
+                dist = float(np.linalg.norm((np.array([cf[f] for f in P]) - x0) / scale))
                 best = (dist, cf); break
         if best is None:
-            rows.append(dict(case=len(rows) + 1, original_prob=base["dnn_prob"], original_verdict=base["verdict"], distance_std=np.nan,
+            rows.append(dict(case=len(rows) + 1, is_fraud=int(row[C.TARGET]), original_prob=base["dnn_prob"], original_verdict=base["verdict"], distance_std=np.nan,
                              final_prob=np.nan, dnn_class_flipped=False, final_verdict=base["verdict"], verdict_flipped=False))
         else:
             res = pipe.assess(best[1], explain=False)
-            rows.append(dict(case=len(rows) + 1, original_prob=base["dnn_prob"], original_verdict=base["verdict"], distance_std=best[0],
+            rows.append(dict(case=len(rows) + 1, is_fraud=int(row[C.TARGET]), original_prob=base["dnn_prob"], original_verdict=base["verdict"], distance_std=best[0],
                              final_prob=res["dnn_prob"], dnn_class_flipped=True, final_verdict=res["verdict"],
                              verdict_flipped=res["verdict"] != base["verdict"]))
     df = pd.DataFrame(rows); df.to_csv(R / "robustness.csv", index=False)
-    return dict(median_distance=float(df.distance_std.median()), dnn_flip_rate=float(df.dnn_class_flipped.mean()),
-                verdict_flip_rate=float(df.verdict_flipped.mean()))
+    # cases with no flip inside the search radius count as >= max_mag (censored), so the median stays defined
+    return dict(median_distance=float(df.distance_std.fillna(max_mag).median()), search_max_std=max_mag,
+                no_flip_cases=int((~df.dnn_class_flipped).sum()), n_cases=int(len(df)),
+                dnn_flip_rate=float(df.dnn_class_flipped.mean()), verdict_flip_rate=float(df.verdict_flipped.mean()))
 
 
 def eval_drift(train, test):
     rows = []
-    fe_tr, fe_te = (FraudPipeline.__new__(FraudPipeline),) * 2
     import joblib
     fe = joblib.load(C.PREPROCESSOR_PATH).named_steps["fe"]
     a, b = fe.transform(train[C.INPUT_COLUMNS]), fe.transform(test[C.INPUT_COLUMNS])
@@ -236,8 +251,8 @@ def eval_drift(train, test):
         v = psi(a[f].astype(float).values, b[f].astype(float).values)
         rows.append(dict(feature=f, psi=v, status="DRIFT" if v > 0.25 else ("WATCH" if v > 0.10 else "STABLE")))
     df = pd.DataFrame(rows); df.to_csv(R / "drift_baseline.csv", index=False)
-    fig, ax = plt.subplots(figsize=(7, 4.5))
-    ax.barh(df.feature, df.psi, color=BLUE); ax.axvline(0.25, c=RED, ls="--", label="Retrain trigger (0.25)")
+    fig, ax = plt.subplots(figsize=(7, 7))
+    ax.barh(df.feature, df.psi, color=BLUE); ax.tick_params(axis="y", labelsize=7); ax.axvline(0.25, c=RED, ls="--", label="Retrain trigger (0.25)")
     ax.axvline(0.10, c=ORANGE, ls=":", label="Watch (0.10)"); ax.invert_yaxis()
     ax.set_xlabel("PSI (train vs test)"); ax.set_title("Drift baseline"); ax.legend(); save_fig("drift_chart.png")
     return float(df.psi.max())
@@ -246,8 +261,8 @@ def eval_drift(train, test):
 def write_readiness():
     m = json.loads((R / "metrics.json").read_text()); lat = json.loads((R / "latency.json").read_text())
     st = json.loads((R / "shap_stability.json").read_text()); rob = json.loads((R / "robustness_summary.json").read_text())
-    cost = json.loads((R / "cost_summary.json").read_text()); fg = pd.read_csv(R / "fairness_gender.csv").iloc[-1]
-    fa = pd.read_csv(R / "fairness_age.csv").iloc[-1]; dr = pd.read_csv(R / "drift_baseline.csv")
+    cost = json.loads((R / "cost_summary.json").read_text()); fg = pd.read_csv(R / "fairness_amount.csv").iloc[-1]
+    fa = pd.read_csv(R / "fairness_time.csv").iloc[-1]; dr = pd.read_csv(R / "drift_baseline.csv")
     tr = R / "testing_report.csv"
     if tr.exists():
         t = pd.read_csv(tr); n_pass = int((t.result == "PASSED").sum()); tests = (f"{n_pass}/{len(t)} passed", n_pass == len(t))
@@ -258,6 +273,7 @@ def write_readiness():
     checks = [
         ("DNN predictive power", "test ROC-AUC >= 0.70", f"{m['dnn']['roc_auc']:.3f}", m["dnn"]["roc_auc"] >= 0.70),
         ("LR predictive power", "test ROC-AUC >= 0.70", f"{m['lr']['roc_auc']:.3f}", m["lr"]["roc_auc"] >= 0.70),
+        ("DNN precision-recall (rare class)", "test PR-AUC >= 0.50", f"{m['dnn']['pr_auc']:.3f}", m["dnn"]["pr_auc"] >= 0.50),
         ("Flag rate sanity", "DNN flag rate <= 50%", f"{m['dnn']['flag_rate']:.1%}", m["dnn"]["flag_rate"] <= 0.5),
         ("False-positive rate", "DNN FPR <= 30%", f"{m['dnn']['confusion_matrix']['fp'] / max(m['dnn']['confusion_matrix']['fp'] + m['dnn']['confusion_matrix']['tn'], 1):.1%}",
          m["dnn"]["confusion_matrix"]["fp"] / max(m["dnn"]["confusion_matrix"]["fp"] + m["dnn"]["confusion_matrix"]["tn"], 1) <= 0.30),
@@ -266,9 +282,11 @@ def write_readiness():
         ("Single-row latency (with SHAP)", "p95 <= 2000 ms", f"{lat['single_with_shap_ms']['p95']:.0f} ms", lat["single_with_shap_ms"]["p95"] <= 2000),
         ("Batch throughput", ">= 100 rows/s", f"{lat['batch']['rows_per_second']:.0f} rows/s", lat["batch"]["rows_per_second"] >= 100),
         ("Explanation stability", "mean Spearman >= 0.80", f"{st['mean_spearman']:.3f} +/- {st['std_spearman']:.3f}", st["mean_spearman"] >= 0.80),
-        ("Fairness (gender)", "flag-rate gap <= 0.10", f"{fg.flag_rate:.3f}", fg.flag_rate <= 0.10),
-        ("Fairness (age band)", "flag-rate gap <= 0.10", f"{fa.flag_rate:.3f}", fa.flag_rate <= 0.10),
-        ("Robustness", "median flip distance >= 0.5 std", f"{rob['median_distance']:.3f} std", rob["median_distance"] >= 0.5),
+        ("Subgroup recall (amount band)", "recall gap <= 0.20", f"{fg.tpr:.3f}", fg.tpr <= 0.20),
+        ("Subgroup recall (time of day)", "recall gap <= 0.20", f"{fa.tpr:.3f}", fa.tpr <= 0.20),
+        ("Robustness", "median flip distance >= 0.5 std",
+         f"{'>= ' if rob['median_distance'] >= rob['search_max_std'] else ''}{rob['median_distance']:.3f} std ({rob['no_flip_cases']}/{rob['n_cases']} never flipped)",
+         rob["median_distance"] >= 0.5),
         ("Data drift (train vs test)", "max PSI <= 0.25", f"{dr.psi.max():.3f}", dr.psi.max() <= 0.25),
         ("Automated tests", "all pass", tests[0], tests[1]),
         ("Model artifacts & metadata", "all files present, metadata complete", "complete" if meta_ok and all(p.exists() for p in [C.LR_PATH, C.DNN_PATH, C.PREPROCESSOR_PATH]) else "missing", meta_ok),
@@ -282,7 +300,7 @@ def write_readiness():
 def main():
     R.mkdir(exist_ok=True); F.mkdir(exist_ok=True)
     pipe = FraudPipeline()
-    train = pd.read_csv(C.TRAIN_CSV, parse_dates=[C.DATE_COL]); test = pd.read_csv(C.TEST_CSV, parse_dates=[C.DATE_COL])
+    train = pipe.train; test = pd.read_csv(C.TEST_CSV)
     y, dp, lp, X, trust = eval_metrics(pipe, test)
     print("metrics done"); (R / "cost_summary.json").write_text(json.dumps(eval_cost(y, dp), indent=2))
     print("cost done"); eval_fairness(test, y, dp, pipe.threshold); print("fairness done")

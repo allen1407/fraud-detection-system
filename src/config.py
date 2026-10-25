@@ -21,7 +21,7 @@ PREPROCESSOR_PATH = MODELS_DIR / "preprocessor.pkl"
 METADATA_PATH = MODELS_DIR / "metadata.json"
 
 SEED = 42
-TARGET = "is_fraud"
+TARGET = "Class"
 SPLIT = (0.70, 0.15, 0.15)
 
 # Cost assumptions (USD)
@@ -34,20 +34,18 @@ MAX_VAL_FPR = 0.30
 TRUST_MIN = 1.0
 KNN_K = 5
 
-# Input schema (what a caller supplies)
-DATE_COL = "Transaction_Date"
-NUMERIC_INPUTS = ["Transaction_Amount", "Customer_Age", "Customer_Income", "Account_Balance"]
-CATEGORICAL_INPUTS = ["Transaction_Type", "Category", "Payment_Method", "Customer_Gender"]
-HIGH_CARD_INPUTS = ["Customer_Occupation", "Merchant_Name"]
-REQUIRED_FIELDS = [DATE_COL] + NUMERIC_INPUTS + CATEGORICAL_INPUTS + HIGH_CARD_INPUTS
+# Input schema (what a caller supplies): Kaggle ULB credit-card data, V1-V28 are anonymised PCA components
+TIME_COL = "Time"                                  # seconds since the first transaction in the 48 h window
+PCA_INPUTS = [f"V{i}" for i in range(1, 29)]
+NUMERIC_INPUTS = [TIME_COL] + PCA_INPUTS + ["Amount"]
+PERTURB_INPUTS = PCA_INPUTS + ["Amount"]           # continuous inputs used for noise / robustness tests
+REQUIRED_FIELDS = NUMERIC_INPUTS
 INPUT_COLUMNS = REQUIRED_FIELDS
 
-RANGES = {
-    "Transaction_Amount": (0.01, 1_000_000.0),
-    "Customer_Age": (18, 100),
-    "Customer_Income": (0.0, 10_000_000.0),
-    "Account_Balance": (0.0, 100_000_000.0),
-}
+RANGES = {TIME_COL: (0.0, 172_800.0), "Amount": (0.0, 1_000_000.0), **{v: (-150.0, 150.0) for v in PCA_INPUTS}}
+
+# Trust-score reference set: every training fraud + this many sampled legitimate rows
+TRUST_REF_LEGIT = 20_000
 
 VERDICTS = ["AUTO-BLOCK", "AUTO-APPROVE", "MANUAL REVIEW", "TRANSACTION REJECTED"]
 RECOMMENDATIONS = {

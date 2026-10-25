@@ -1,7 +1,7 @@
 {
   "n_samples": 30,
-  "noise": "1% multiplicative Gaussian on numeric inputs",
-  "mean_spearman": 0.99732407278374,
-  "std_spearman": 0.004706406979604343,
-  "min_spearman": 0.9792899408284023
+  "noise": "1% multiplicative Gaussian on V1-V28 and Amount",
+  "mean_spearman": 0.995489680282198,
+  "std_spearman": 0.019370076927711817,
+  "min_spearman": 0.8918819646039551
 }

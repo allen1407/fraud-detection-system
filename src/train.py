@@ -86,7 +86,7 @@ def main():
     C.MODELS_DIR.mkdir(exist_ok=True)
     df = load_clean()
     train, val, test = split_and_save(df)
-    print(f"rows: train={len(train)} val={len(val)} test={len(test)}; fraud rate train={train[C.TARGET].mean():.3f}")
+    print(f"rows: train={len(train)} val={len(val)} test={len(test)}; fraud rate train={train[C.TARGET].mean():.4f}")
 
     pre = build_preprocessor().fit(train[C.INPUT_COLUMNS])        # fit ONLY on train
     Xtr, Xva, Xte = (pre.transform(d[C.INPUT_COLUMNS]) for d in (train, val, test))
@@ -96,8 +96,9 @@ def main():
     lr = LogisticRegression(max_iter=1000, random_state=C.SEED).fit(Xtr, ytr)
 
     dnn = build_dnn(Xtr.shape[1])
-    es = tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=10, restore_best_weights=True)
-    hist = dnn.fit(Xtr, ytr, validation_data=(Xva, yva), epochs=200, batch_size=64, callbacks=[es], verbose=0)
+    es = tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=8, restore_best_weights=True)
+    # ~200k rows: a larger batch keeps an epoch to a few seconds; imbalance is handled by threshold choice, not weights
+    hist = dnn.fit(Xtr, ytr, validation_data=(Xva, yva), epochs=100, batch_size=512, callbacks=[es], verbose=0)
     print("DNN epochs run:", len(hist.history["loss"]), "best val_loss:", round(min(hist.history["val_loss"]), 4))
 
     pva = dnn.predict(Xva, verbose=0).ravel()
@@ -134,7 +135,6 @@ def main():
         epochs_run=len(hist.history["loss"]),
         library_versions=dict(python=sys.version.split()[0], numpy=np.__version__, sklearn=sklearn.__version__,
                               tensorflow=tf.__version__, pandas=__import__("pandas").__version__),
-        categories={c: sorted(df[c].unique().tolist()) for c in C.CATEGORICAL_INPUTS},
     )
     C.METADATA_PATH.write_text(json.dumps(meta, indent=2))
     print("\nSaved models + metadata. Sanity gate:", "PASS" if ok else "FAIL")

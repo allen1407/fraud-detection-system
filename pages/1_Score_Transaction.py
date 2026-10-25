@@ -1,40 +1,32 @@
-import datetime as dt
-
 import plotly.graph_objects as go
 import streamlit as st
 
 from src import config as C
-from src.ui import badge, get_pipeline, require_artifacts
+from src.ui import badge, get_pipeline, presets, require_artifacts
 
 st.set_page_config(page_title="Score Transaction", page_icon="🔎", layout="centered")
 st.title("🔎 Score Transaction")
-st.caption("Enter the transaction details and press Predict.")
+st.caption("Pick an example or edit the values, then press Predict.")
 try:
     require_artifacts()
     pipe = get_pipeline()
-    cats = pipe.categories
+    examples = presets()
+    name = st.selectbox("Load example (real test-set row)", [k for k in examples if k != "Invalid Input"])
+    ex = examples[name]
 
     with st.form("txn"):
         a, b = st.columns(2)
-        date = a.date_input("Date", dt.date(2024, 6, 1))
-        time = b.time_input("Time", dt.time(12, 0))
-        amount = a.number_input("Amount ($)", value=1000.0, min_value=-1e9, step=10.0)
-        age = b.number_input("Customer age", value=40, min_value=-10, max_value=1000, step=1)
-        income = a.number_input("Customer income ($)", value=60000.0, min_value=-1e9, step=1000.0)
-        balance = b.number_input("Account balance ($)", value=8000.0, min_value=-1e9, step=100.0)
-        ttype = a.selectbox("Transaction type", cats["Transaction_Type"])
-        category = b.selectbox("Merchant category", cats["Category"])
-        pay = a.selectbox("Payment method", cats["Payment_Method"])
-        gender = b.selectbox("Gender", cats["Customer_Gender"])
-        occupation = a.text_input("Occupation", "Teacher")
-        merchant = b.text_input("Merchant name", "Example Store")
+        time = a.number_input("Time (seconds since window start, 0-172800)", value=float(ex[C.TIME_COL]), step=60.0,
+                              key=f"time_{name}")
+        amount = b.number_input("Amount ($)", value=float(ex["Amount"]), min_value=-1e9, step=1.0, key=f"amount_{name}")
+        with st.expander("PCA components V1-V28 (anonymised by the data provider)", expanded=False):
+            cols = st.columns(4)
+            pcs = {v: cols[i % 4].number_input(v, value=float(ex[v]), format="%.4f", key=f"{v}_{name}")
+                   for i, v in enumerate(C.PCA_INPUTS)}
         go_btn = st.form_submit_button("Predict", type="primary", use_container_width=True)
 
     if go_btn:
-        rec = {C.DATE_COL: dt.datetime.combine(date, time).isoformat(sep=" "), "Transaction_Amount": amount,
-               "Customer_Age": age, "Customer_Income": income, "Account_Balance": balance,
-               "Transaction_Type": ttype, "Category": category, "Payment_Method": pay, "Customer_Gender": gender,
-               "Customer_Occupation": occupation, "Merchant_Name": merchant}
+        rec = {C.TIME_COL: time, **pcs, "Amount": amount}
         res = pipe.assess(rec)
         badge(res["verdict"]); st.write("")
         if not res["valid"]:
@@ -43,8 +35,8 @@ try:
                 st.markdown(f"- {e}")
         else:
             c1, c2, c3 = st.columns(3)
-            c1.metric("DNN fraud probability", f"{res['dnn_prob']:.1%}")
-            c2.metric("LR fraud probability", f"{res['lr_prob']:.1%}")
+            c1.metric("DNN fraud probability", f"{res['dnn_prob']:.2%}")
+            c2.metric("LR fraud probability", f"{res['lr_prob']:.2%}")
             c3.metric("Trust score", f"{res['trust']:.2f}")
             st.write(f"**Recommendation:** {res['recommendation']}")
             f = res["factors"][::-1]

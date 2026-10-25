@@ -20,7 +20,7 @@ def pipe():
 
 @pytest.fixture(scope="session")
 def test_df():
-    return pd.read_csv(C.TEST_CSV, parse_dates=[C.DATE_COL])
+    return pd.read_csv(C.TEST_CSV)
 
 
 @pytest.fixture

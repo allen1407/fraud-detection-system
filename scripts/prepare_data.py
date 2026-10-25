@@ -1,6 +1,6 @@
-"""Extract the dataset zip into data/raw/, validate columns and write data/processed/.
+"""Copy the dataset (CSV or zip) into data/raw/, validate columns and write data/processed/.
 
-Usage: python scripts/prepare_data.py [path/to/archive.zip]
+Usage: python scripts/prepare_data.py [path/to/creditcard.csv | path/to/archive.zip]
 """
 import json
 import shutil
@@ -15,69 +15,56 @@ RAW = ROOT / "data" / "raw"
 PROCESSED = ROOT / "data" / "processed"
 
 COLUMN_ROLES = {
-    "Transaction_ID": "id",
-    "Account_Number": "id",
-    "Transaction_Date": "date",
-    "Transaction_Amount": "amount",
-    "Merchant_Name": "merchant",
-    "Transaction_Type": "type",
-    "Category": "merchant_category",
-    "City": "city",
-    "Country": "country",
-    "Payment_Method": "payment_method",
-    "Customer_Age": "age",
-    "Customer_Gender": "gender",
-    "Customer_Occupation": "occupation",
-    "Customer_Income": "income",
-    "Account_Balance": "balance",
-    "Transaction_Status": "status",
-    "Fraud_Flag": "label",
-    "Discount_Applied": "discount",
-    "Loyalty_Points_Earned": "loyalty_points",
-    "Transaction_Description": "free_text",
+    "Time": "seconds since the first transaction (48 h window)",
+    **{f"V{i}": "anonymised PCA component" for i in range(1, 29)},
+    "Amount": "amount",
+    "Class": "label (1 = fraud)",
 }
 
 
-def find_zip(arg):
+def find_source(arg):
     if arg:
         return Path(arg)
     for cand in [RAW, ROOT, ROOT.parent]:
-        zips = sorted(cand.glob("*.zip"))
-        if zips:
-            return zips[0]
-    sys.exit("No zip found. Pass the path: python scripts/prepare_data.py <zip>")
+        for pattern in ("creditcard*.csv", "*.zip"):
+            hits = sorted(cand.glob(pattern))
+            if hits:
+                return hits[0]
+    sys.exit("No dataset found. Pass the path: python scripts/prepare_data.py <creditcard.csv>")
 
 
 def main():
-    zpath = find_zip(sys.argv[1] if len(sys.argv) > 1 else None)
+    src = find_source(sys.argv[1] if len(sys.argv) > 1 else None)
     RAW.mkdir(parents=True, exist_ok=True)
     PROCESSED.mkdir(parents=True, exist_ok=True)
-    if zpath.resolve().parent != RAW.resolve():
-        shutil.copy(zpath, RAW / zpath.name)
-    with zipfile.ZipFile(zpath) as z:
-        z.extractall(RAW)
-        print("Extracted:", z.namelist())
-
-    csvs = sorted(RAW.glob("*.csv"))
-    if not csvs:
-        sys.exit("No CSV found in zip")
-    main_csv = max(csvs, key=lambda p: p.stat().st_size)
-    df = pd.read_csv(main_csv, parse_dates=["Transaction_Date"])
+    if src.resolve().parent != RAW.resolve():
+        shutil.copy(src, RAW / src.name)
+    if src.suffix == ".zip":
+        with zipfile.ZipFile(src) as z:
+            z.extractall(RAW)
+            print("Extracted:", z.namelist())
+        main_csv = max(RAW.glob("*.csv"), key=lambda p: p.stat().st_size)
+    else:
+        main_csv = RAW / src.name
+    df = pd.read_csv(main_csv)
 
     missing = [c for c in COLUMN_ROLES if c not in df.columns]
     if missing:
         sys.exit(f"Missing expected columns: {missing}")
-    df["is_fraud"] = (df["Fraud_Flag"].astype(str).str.strip().str.lower() == "yes").astype(int)
-    df = df.drop_duplicates("Transaction_ID").reset_index(drop=True)
+    n_raw = len(df)
+    df["Class"] = df["Class"].astype(int)
+    df = df.drop_duplicates().reset_index(drop=True)
 
     df.to_csv(PROCESSED / "transactions_clean.csv", index=False)
     summary = {
         "source_csv": main_csv.name,
+        "raw_rows": int(n_raw),
+        "duplicates_removed": int(n_raw - len(df)),
         "rows": int(len(df)),
-        "fraud_rows": int(df.is_fraud.sum()),
-        "fraud_rate": round(float(df.is_fraud.mean()), 4),
-        "date_min": str(df.Transaction_Date.min()),
-        "date_max": str(df.Transaction_Date.max()),
+        "fraud_rows": int(df.Class.sum()),
+        "fraud_rate": round(float(df.Class.mean()), 5),
+        "time_span_hours": round(float(df.Time.max() - df.Time.min()) / 3600, 1),
+        "amount_max": float(df.Amount.max()),
         "missing_values": int(df.isna().sum().sum()),
         "column_roles": COLUMN_ROLES,
     }

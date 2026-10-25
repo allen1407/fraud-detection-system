@@ -1,13 +1,13 @@
 # Intelligent Fraud Detection System
 
-A Streamlit decision-support system that scores banking transactions with a Keras DNN and logistic regression, explains them with SHAP, and routes uncertain cases to human review (Computational Intelligence Lab, Tasks 9 and 10).
+A Streamlit decision-support system that scores credit-card transactions with a Keras DNN and logistic regression, explains them with SHAP, and routes uncertain cases to human review (Computational Intelligence Lab, Tasks 9 and 10).
 
-> **Key finding.** Both models score close to chance (test ROC-AUC 0.524 DNN, 0.510 LR). A 5-fold gradient-boosting check on the raw data gives ≈0.51 as well. The dataset shows no learnable fraud signal (fraud rate is ≈49% in every category, and the account numbers and descriptions are unique per row, which suggests simulated data). The system demonstrates integration, explainability, testing and governance; it does **not** demonstrate real fraud-detection skill.
+> **Key finding.** Both models detect fraud well in ranking terms: test ROC-AUC 0.951 (DNN) and 0.969 (LR), PR-AUC 0.711 and 0.725 against a fraud base rate of only 0.17%. At its operating threshold the DNN catches 56 of 71 test frauds with 13 false alarms among 42,488 legitimate transactions. The simple logistic regression ranks slightly better than the DNN; the DNN's advantage is higher recall at the chosen threshold. Caveats: only 71 frauds in the test set (wide uncertainty), anonymised PCA features (explanations are not business-readable), two days of 2013 data, a random rather than temporal split, and no customer attributes for a fairness audit.
 
 ## Dataset
-Kaggle banking-transactions fraud dataset (USA, 2023-2024). **5,389 rows**, **49.3% fraud** (2,657 fraud rows), 2023-01-21 to 2025-01-20, no missing values. Columns used: transaction date/time, amount, merchant, merchant category, transaction type, payment method, customer age, gender, occupation, income, account balance; label `Fraud_Flag`.
+Kaggle **Credit Card Fraud Detection** dataset (ULB Machine Learning Group): transactions made by European cardholders over two days in September 2013. Raw file `creditcard.csv`: 284,807 rows; 1,081 exact duplicates removed, leaving **283,726 rows** with **473 frauds (0.167%)**, no missing values. Columns: `Time` (seconds since the first transaction, 48 h span), `V1`-`V28` (PCA components; the original features are confidential), `Amount` (max $25,691.16) and the label `Class` (1 = fraud). Source: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud (licence: Open Database License, ODbL).
 
-Source: [Kaggle link]
+Place `creditcard.csv` in `data/raw/` (it is git-ignored because of its 150 MB size).
 
 ## Architecture
 ```mermaid
@@ -36,34 +36,34 @@ flowchart LR
 | Deliverable | File path | Status |
 |---|---|---|
 | Metrics, thresholds | `reports/metrics.json` | Done |
-| Figures (ROC, PR, confusion, cost, SHAP, fairness, drift) | `reports/figures/` | Done |
+| Figures (ROC, PR, confusion, cost, SHAP, subgroups, drift) | `reports/figures/` | Done |
 | Cost sweep | `reports/cost_threshold.csv` | Done |
 | Latency | `reports/latency.json` | Done |
 | SHAP stability | `reports/shap_stability.json` | Done |
-| Fairness | `reports/fairness_gender.csv`, `reports/fairness_age.csv` | Done |
+| Subgroup / fairness analysis | `reports/fairness_amount.csv`, `reports/fairness_time.csv` | Done (no customer attributes in the data) |
 | Robustness | `reports/robustness.csv` | Done |
 | Drift baseline | `reports/drift_baseline.csv` | Done |
-| Readiness checklist | `reports/deployment_readiness.csv` | Done (5 checks FAIL) |
+| Readiness checklist | `reports/deployment_readiness.csv` | Done (2 checks FAIL) |
 | Tests + report | `tests/`, `reports/testing_report.csv` | Done (13/13 pass) |
 | SRS, SDD, user manual, RAI report, testing report, final report | `docs/` | Done |
 | Final report PDF | `reports/Task9_10_Report.pdf` | Done |
 | Notebook (executed) | `notebooks/01_eda_and_training.ipynb` | Done |
 
 ## Headline results (test set)
-| Metric | DNN (threshold 0.50) | Logistic regression (0.50) |
+| Metric | DNN (threshold 0.40) | Logistic regression (0.50) |
 |---|---|---|
-| ROC-AUC | 0.524 | 0.510 |
-| PR-AUC | 0.508 | 0.506 |
-| F1 | 0.376 | 0.459 |
-| Precision | 0.518 | 0.511 |
-| Recall | 0.296 | 0.416 |
-| Accuracy | 0.517 | 0.515 |
-| Flag rate | 28.2% | 40.2% |
-| Confusion matrix (TN/FP/FN/TP) | 300/110/281/118 | 251/159/233/166 |
+| ROC-AUC | 0.951 | 0.969 |
+| PR-AUC | 0.711 | 0.725 |
+| F1 | 0.800 | 0.752 |
+| Precision | 0.812 | 0.870 |
+| Recall | 0.789 | 0.662 |
+| Accuracy | 0.999 | 0.999 |
+| Flag rate | 0.16% | 0.13% |
+| Confusion matrix (TN/FP/FN/TP) | 42475/13/15/56 | 42481/7/24/47 |
 
-Test set: 809 transactions (49.3% fraud). Source: `reports/metrics.json`.
+Test set: 42,559 transactions (0.17% fraud, 71 frauds). Source: `reports/metrics.json`.
 
-Operating threshold: 0.50, see the threshold note in `docs/SDD.md`. Readiness: 5 of 15 checks FAIL (predictive power, cost vs flag-all, fairness gaps); do not use for real automatic decisions.
+Operating threshold: 0.40, see the threshold note in `docs/SDD.md`. Readiness: 2 of 16 checks FAIL (Subgroup recall (amount band), Subgroup recall (time of day)); see `docs/DEPLOYMENT_GUIDE.md`.
 
 ## Screenshots
 ![Home](docs/screenshots/01_home.png)
@@ -77,8 +77,8 @@ Operating threshold: 0.50, see the threshold note in `docs/SDD.md`. Readiness: 5
 ```bash
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-# 1. place the dataset zip in data/raw/
-python scripts/prepare_data.py data/raw/archive.zip   # 2. prepare data
+# 1. place creditcard.csv in data/raw/
+python scripts/prepare_data.py data/raw/creditcard.csv   # 2. prepare data
 python -m src.train                                   # 3. train
 python -m src.evaluate                                # 4. evaluate
 python -m pytest -q                                   #    tests
@@ -100,7 +100,7 @@ fraud-detection-system/
 ├── src/                        config, data, features, train, pipeline, evaluate, ui
 ├── scripts/                    prepare_data.py, run_all.sh, build_docs.py, build_report_pdf.py, screenshots.py
 ├── models/                     LR, DNN, preprocessor, metadata.json
-├── data/                       raw/ (zip + csv), processed/, samples/sample_batch.csv
+├── data/                       raw/creditcard.csv, processed/ (both git-ignored), samples/sample_batch.csv
 ├── notebooks/                  01_eda_and_training.ipynb
 ├── reports/                    metrics.json, CSVs, figures/, Task9_10_Report.pdf
 ├── docs/                       SRS, SDD, USER_MANUAL, RESPONSIBLE_AI_REPORT, DEPLOYMENT_GUIDE, TESTING_REPORT, FINAL_REPORT, screenshots/
@@ -108,8 +108,8 @@ fraud-detection-system/
 ```
 
 ## Limitations
-- No learnable fraud signal in this dataset (ROC-AUC ≈ 0.5); the system shows integration, not detection skill.
-- ≈49% fraud rate is unrealistic for live banking traffic; thresholds must be recalibrated before real use.
-- The data looks synthetic; fairness groups are small; SHAP explains the DNN only.
+- Only 71 frauds in the test set; metrics carry wide uncertainty.
+- V1-V28 are anonymised PCA components, so SHAP factors are not business-readable and protected-attribute proxies cannot be ruled out.
+- Two days of 2013 data with a random split; re-validate on recent traffic before real use.
+- No customer attributes, so fairness is approximated with amount and time-of-day segments.
 - Docker image and Hugging Face deployment were documented but not executed in the build environment.
-- Raw data licence not verified: check the Kaggle licence before redistributing `data/raw/`.

@@ -31,7 +31,7 @@ def read_csv(name):
 
 @st.cache_data
 def read_test():
-    return pd.read_csv(C.TEST_CSV, parse_dates=[C.DATE_COL])
+    return pd.read_csv(C.TEST_CSV)
 
 
 def require_artifacts():
@@ -72,16 +72,18 @@ def presets():
     test, pred = read_test(), read_csv("test_predictions.csv")
     thr = read_json("metrics.json")["thresholds"]["dnn_operating"]
     cols = C.INPUT_COLUMNS
-    def pick(mask, key, asc):
-        d = pred[mask].sort_values(key, ascending=asc)
-        return test.loc[d.index[0], cols].to_dict()
+    def pick(mask, fallback, key, asc):
+        d = pred[mask] if mask.any() else pred[fallback]       # fall back to the label alone if no row matches
+        return test.loc[d.sort_values(key, ascending=asc).index[0], cols].to_dict()
+    legit, fraud = pred.y_true == 0, pred.y_true == 1
     out = {
-        "Clear Legit": pick((pred.y_true == 0) & (pred.verdict == "AUTO-APPROVE"), "dnn_prob", True),
-        "Clear Fraud": pick((pred.y_true == 1) & (pred.verdict == "AUTO-BLOCK"), "dnn_prob", False),
+        "Clear Legit": pick(legit & (pred.verdict == "AUTO-APPROVE"), legit, "dnn_prob", True),
+        "Clear Fraud": pick(fraud & (pred.verdict == "AUTO-BLOCK"), fraud, "dnn_prob", False),
     }
-    bl = pred[pred.verdict == "MANUAL REVIEW"].assign(d=lambda x: (x.dnn_prob - thr).abs()).sort_values("d")
+    review = pred.verdict == "MANUAL REVIEW"
+    bl = pred[review if review.any() else slice(None)].assign(d=lambda x: (x.dnn_prob - thr).abs()).sort_values("d")
     out["Borderline"] = test.loc[bl.index[0], cols].to_dict()
-    inv = dict(out["Clear Legit"]); inv["Transaction_Amount"] = -250.0
+    inv = dict(out["Clear Legit"]); inv["Amount"] = -250.0
     out["Invalid Input"] = inv
     return out
 

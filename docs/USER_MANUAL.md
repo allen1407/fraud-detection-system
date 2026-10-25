@@ -9,7 +9,7 @@ Project overview, dataset summary, architecture and headline test metrics.
 
 ## Scoring a single transaction
 1. Open **Score Transaction**.
-2. Fill in the fields (date, time, amount, age, income, balance, type, merchant category, payment method, gender, occupation, merchant name).
+2. Pick an example in **Load example** (a real test-set transaction: Clear Legit, Clear Fraud or Borderline), or type your own values: `Time` (seconds since the start of the 48-hour window), `Amount`, and the 28 PCA components in the *V1-V28* section.
 3. Click **Predict**.
 4. Read the coloured verdict (red AUTO-BLOCK, green AUTO-APPROVE, amber MANUAL REVIEW, grey TRANSACTION REJECTED), the DNN and LR fraud probabilities, the trust score, the recommendation and the top-5 SHAP factors (red raises fraud risk, green lowers it). Open **Full report** for the complete text report.
 5. If the input is invalid (for example a negative amount) the transaction is rejected and the reasons are listed.

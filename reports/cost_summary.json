@@ -1,6 +1,6 @@
 {
-  "approve_all_cost": 199500.0,
-  "flag_all_cost": 6150.0,
-  "optimum_threshold": 0.25,
-  "optimum_cost": 6120.0
+  "approve_all_cost": 35500.0,
+  "flag_all_cost": 637320.0,
+  "optimum_threshold": 0.04,
+  "optimum_cost": 7010.0
 }

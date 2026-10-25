@@ -7,10 +7,10 @@ from . import config as C
 
 def load_clean() -> pd.DataFrame:
     if not C.CLEAN_CSV.exists():
-        raise FileNotFoundError("Run `python scripts/prepare_data.py data/raw/<zip>` first.")
-    df = pd.read_csv(C.CLEAN_CSV, parse_dates=[C.DATE_COL])
-    df = df.drop_duplicates("Transaction_ID").dropna(subset=C.REQUIRED_FIELDS + [C.TARGET])
-    df = df[df["Transaction_Amount"] > 0]
+        raise FileNotFoundError("Run `python scripts/prepare_data.py data/raw/creditcard.csv` first.")
+    df = pd.read_csv(C.CLEAN_CSV)
+    df = df.drop_duplicates().dropna(subset=C.REQUIRED_FIELDS + [C.TARGET])
+    df = df[df["Amount"] >= 0]
     return df.reset_index(drop=True)
 
 
@@ -23,4 +23,4 @@ def split_and_save(df: pd.DataFrame):
 
 
 def load_splits():
-    return tuple(pd.read_csv(p, parse_dates=[C.DATE_COL]) for p in (C.TRAIN_CSV, C.VAL_CSV, C.TEST_CSV))
+    return tuple(pd.read_csv(p) for p in (C.TRAIN_CSV, C.VAL_CSV, C.TEST_CSV))

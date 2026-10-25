@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # One command to reproduce everything: data -> train -> evaluate -> tests -> notebook -> docs PDF.
-# Usage: bash scripts/run_all.sh [path/to/dataset.zip]
+# Usage: bash scripts/run_all.sh [path/to/creditcard.csv]
 set -euo pipefail
 cd "$(dirname "$0")/.."
-ZIP="${1:-$(ls data/raw/*.zip 2>/dev/null | head -1 || true)}"
-[ -n "$ZIP" ] || { echo "Place the dataset zip in data/raw/ (or pass its path)"; exit 1; }
+DATA="${1:-$(ls data/raw/creditcard*.csv data/raw/*.zip 2>/dev/null | head -1 || true)}"
+[ -n "$DATA" ] || { echo "Place creditcard.csv in data/raw/ (or pass its path)"; exit 1; }
 
-echo "== 1/6 prepare data";   python scripts/prepare_data.py "$ZIP"
+echo "== 1/6 prepare data";   python scripts/prepare_data.py "$DATA"
 echo "== 2/6 train";          python -m src.train
 echo "== 3/6 evaluate";       python -m src.evaluate
 echo "== 4/6 tests";          python -m pytest -q
