@@ -4,6 +4,17 @@ A Streamlit decision-support system that scores credit-card transactions with a 
 
 > **Key finding.** Both models detect fraud well in ranking terms: test ROC-AUC 0.951 (DNN) and 0.969 (LR), PR-AUC 0.711 and 0.725 against a fraud base rate of only 0.17%. At its operating threshold the DNN catches 56 of 71 test frauds with 13 false alarms among 42,488 legitimate transactions. The simple logistic regression ranks slightly better than the DNN; the DNN's advantage is higher recall at the chosen threshold. Caveats: only 71 frauds in the test set (wide uncertainty), anonymised PCA features (explanations are not business-readable), two days of 2013 data, a random rather than temporal split, and no customer attributes for a fairness audit.
 
+## Web app (Vercel)
+Live: https://fraud-detection-sentinel.vercel.app
+
+`web/` is a React + Vite frontend that runs the whole pipeline (validation, DNN + LR scoring, kNN trust score, routing, SHAP explanations and reports) in the browser, so it deploys as a static site. `scripts/export_web.py` exports the trained models and reports to `web/public/`; browser probabilities match the Python pipeline to within 1e-6. SHAP uses a permutation estimate rather than KernelExplainer, so factor values differ slightly.
+
+```bash
+.venv/bin/python scripts/export_web.py   # after retraining
+cd web && npm install && npm run dev     # local dev server
+npx vercel deploy --prod                 # deploy
+```
+
 ## Dataset
 Kaggle **Credit Card Fraud Detection** dataset (ULB Machine Learning Group): transactions made by European cardholders over two days in September 2013. Raw file `creditcard.csv`: 284,807 rows; 1,081 exact duplicates removed, leaving **283,726 rows** with **473 frauds (0.167%)**, no missing values. Columns: `Time` (seconds since the first transaction, 48 h span), `V1`-`V28` (PCA components; the original features are confidential), `Amount` (max $25,691.16) and the label `Class` (1 = fraud). Source: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud (licence: Open Database License, ODbL).
 
